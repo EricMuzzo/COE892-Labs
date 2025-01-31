@@ -1,10 +1,13 @@
 import time
+import random
+from hashlib import sha256
+
 """All the data models for the Rover application"""
     
 class Cell():
     """Represents a single cell on the map"""
     
-    def __init__(self, x: int, y: int, value: str):
+    def __init__(self, x: int, y: int, value: str, mine_serial: str = None):
         self.x_coord: int = x
         self.y_coord: int = y
         self.value: str = value
@@ -12,6 +15,7 @@ class Cell():
         self.down: Cell = None
         self.left: Cell = None
         self.right: Cell = None
+        self.mine_serial: str = mine_serial
         
     def __repr__(self):
         return f"Cell({self.x_coord}, {self.y_coord}, {self.value})"
@@ -20,23 +24,38 @@ class Cell():
 class Map():
     """The data structure for the 2D map grid"""
     
-    def __init__(self, map_file_path: str):
+    def __init__(self, map_file_path: str, mine_file_path: str):
         
         self.cells: list[list[Cell]] = []
         
-        #Process the map file and generate Cell objects
-        f = open(map_file_path, "r")
-        header = f.readline().split()
+        #Process the map and mines files and generate Cell objects
+        map_f = open(map_file_path, "r")
+        header = map_f.readline().split()
 
         self.num_rows = int(header[0])
         self.num_cols = int(header[1])
         
-        for row_index, line in enumerate(f):
+        mine_f = open(mine_file_path, "r")
+        mine_serials = [line.strip() for line in mine_f]
+        num_serials = len(mine_serials)
+        serial_cntr = 0
+        
+        for row_index, line in enumerate(map_f):
             row = []
             for col_index, cell in enumerate(line.strip().split()):
-                cell_val = "MINE" if cell == "1" else "EMPTY"
-                row.append(Cell(row_index, col_index, cell_val))
+                if cell == "1":
+                    cell_val = "MINE"
+                    cell_mine_serial = mine_serials[serial_cntr % num_serials]
+                    serial_cntr += 1
+                    row.append(Cell(row_index, col_index, cell_val, cell_mine_serial))
+                else:
+                    cell_val = "EMPTY"
+                    row.append(Cell(row_index, col_index, cell_val))
+                
             self.cells.append(row)
+            
+        map_f.close()
+        mine_f.close()
             
         #Link the cells together
         self._link_cells()
@@ -90,39 +109,23 @@ class Rover():
             case "L":
                 match self.orientation:
                     case "DOWN":
-                        if self.position.right is not None:
-                            self.position = self.position.right
-                            self.orientation = "RIGHT"
+                        self.orientation = "RIGHT"
                     case "UP":
-                        if self.position.left is not None:
-                            self.position = self.position.left
-                            self.orientation = "LEFT"
+                        self.orientation = "LEFT"
                     case "LEFT":
-                        if self.position.down is not None:
-                            self.position = self.position.down
-                            self.orientation = "DOWN"
+                        self.orientation = "DOWN"
                     case "RIGHT":
-                        if self.position.up is not None:
-                            self.position = self.position.up
-                            self.orientation = "UP"
+                        self.orientation = "UP"
             case "R":
                 match self.orientation:
                     case "DOWN":
-                        if self.position.left is not None:
-                            self.position = self.position.left
-                            self.orientation = "LEFT"
+                        self.orientation = "LEFT"
                     case "UP":
-                        if self.position.right is not None:
-                            self.position = self.position.right
-                            self.orientation = "RIGHT"
+                        self.orientation = "RIGHT"
                     case "LEFT":
-                        if self.position.up is not None:
-                            self.position = self.position.up
-                            self.orientation = "UP"
+                        self.orientation = "UP"
                     case "RIGHT":
-                        if self.position.down is not None:
-                            self.position = self.position.down
-                            self.orientation = "DOWN"
+                        self.orientation = "DOWN"
             case "D":
                 print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_coord}, {self.position.y_coord}). Mine dug. Proceeding...")
             
@@ -140,10 +143,41 @@ class Rover():
             
             self.move(cmd)
             
-    def __repr__(self):
+    def hashKey(self, pin: str, serial: str) -> str:
+        temp_key = pin + serial
+        
+        hasher = sha256()
+        hasher.update(temp_key.encode())
+        
+        hash_key = hasher.hexdigest()
+        
+        return hash_key
+        
+            
+    def mine(self, serial: str) -> bool:
+        """Attempts to mine the current mine with the given serial number.
+
+        Args:
+            serial (str): The serial number of the mine
+
+        Returns:
+           (bool) : True if the mine was successfully mined, False otherwise
+        """
+        
+        max_attempts = 50000
+        pin = 0
+        for _ in range(max_attempts):
+            hash_val = self.hashKey(str(pin), serial)
+            
+            if hash_val[0:6] == '000000':
+                return True
+            
+        return False
+                    
+    def __repr__(self) -> str:
         return f"[ROVER {self.id}]: Position: ({self.position.x_coord}, {self.position.y_coord}), Orientation: {self.orientation}"
     
-    def getPathArrayString(self):
+    def getPathArrayString(self) -> str:
         string = ''
         for row in self.path_array:
             string += " ".join(char for char in row) + "\n"
