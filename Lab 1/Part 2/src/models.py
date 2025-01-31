@@ -92,7 +92,7 @@ class Rover():
         self.position: Cell = start_cell
         self.orientation: str = "DOWN"
         
-    def move(self, command: str):
+    def move(self, command: str) -> bool:
         "Moves the rover in the direction specified by the command and updates position and orientation."
         
         match command:
@@ -127,7 +127,14 @@ class Rover():
                     case "RIGHT":
                         self.orientation = "DOWN"
             case "D":
-                print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_coord}, {self.position.y_coord}). Mine dug. Proceeding...")
+                print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_coord}, {self.position.y_coord}). Serial {self.position.mine_serial}. Begin digging...")
+                
+                if not self.mine(self.position.mine_serial):
+                    print(f"[ROVER {self.id}]: Failed to mine mine with serial {self.position.mine_serial}. Rover destroyed.")
+                    return False
+                
+        return True
+                
             
     def run(self):
         """Runs the rover through the map"""
@@ -141,15 +148,16 @@ class Rover():
                 print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_coord}, {self.position.y_coord}). Command was not \'D\'. Rover destroyed.")
                 break
             
-            self.move(cmd)
+            if self.position.value != "MINE" and cmd == "D":
+                continue
+
+            if not self.move(cmd):
+                break
             
     def hashKey(self, pin: str, serial: str) -> str:
         temp_key = pin + serial
         
-        hasher = sha256()
-        hasher.update(temp_key.encode())
-        
-        hash_key = hasher.hexdigest()
+        hash_key = sha256(temp_key.encode()).hexdigest()
         
         return hash_key
         
@@ -164,13 +172,19 @@ class Rover():
            (bool) : True if the mine was successfully mined, False otherwise
         """
         
-        max_attempts = 50000
         pin = 0
-        for _ in range(max_attempts):
+        while True:
             hash_val = self.hashKey(str(pin), serial)
             
-            if hash_val[0:6] == '000000':
+            if hash_val.startswith("000000"):
+                
+                #Clear the current cell
+                self.position.value = "EMPTY"
+                
+                print(f"[MINE {serial}]: Dig Success. Pin: {pin}. Full hash: {hash_val}")
                 return True
+            
+            pin += 1
             
         return False
                     

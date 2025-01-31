@@ -3,7 +3,8 @@ import requests
 import time
 from threading import Thread
 
-path = "./res/map1.txt"
+map_path = "./res/map1.txt"
+mine_path = "./res/mines.txt"
 num_rovers = 10
 baseURL = "https://coe892.reev.dev/lab1/rover/"
 
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     
     start_time = time.time()
     #Initialize the map grid and rover objects
-    grid = Map(path)
+    grid = Map(map_path, mine_path)
     print("Map initialized")
     
     if option == "1":
