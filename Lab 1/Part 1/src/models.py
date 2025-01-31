@@ -121,6 +121,9 @@ class Rover():
             if self.position.value == "MINE" and cmd != "D":
                 print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_coord}, {self.position.y_coord}). Command was not \'D\'. Rover destroyed.")
                 break
+
+            if self.position.value != "MINE" and cmd == "D":
+                continue
             
             self.move(cmd)
             
