@@ -3,7 +3,7 @@ import requests
 import time
 from threading import Thread
 
-path = "./res/map1.txt"
+path = "./res/map.txt"
 num_rovers = 10
 baseURL = "https://coe892.reev.dev/lab1/rover/"
 
@@ -31,9 +31,9 @@ def static_main():
     """Non-threaded version of the program"""
     
     rovers: dict[int, Rover] = init_rovers(map_width=grid.num_cols, map_height=grid.num_rows)
-    print("\nRovers initialized:")
-    for rover in rovers:
-        print(rovers[rover])
+    print("Rovers initialized.\n")
+    # for rover in rovers:
+    #     print(rovers[rover])
         
     for rover in rovers.values():
         print(f"[ROVER {rover.id}]: starting...")
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     start_time = time.time()
     #Initialize the map grid and rover objects
     grid = Map(path)
-    print("Map initialized")
+    print("Map initialized\n")
     
     if option == "1":
         static_main()
