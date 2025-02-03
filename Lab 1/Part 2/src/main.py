@@ -3,7 +3,7 @@ import requests
 import time
 from threading import Thread
 
-map_path = "./res/map1.txt"
+map_path = "./res/map.txt"
 mine_path = "./res/mines.txt"
 num_rovers = 10
 baseURL = "https://coe892.reev.dev/lab1/rover/"
