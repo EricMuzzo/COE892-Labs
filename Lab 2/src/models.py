@@ -1,5 +1,3 @@
-import time
-import random
 import logging
 from hashlib import sha256
 from rpc import ground_control_pb2 as gc_pb2
@@ -29,7 +27,7 @@ class Cell():
         return f"Cell({self.x_coord}, {self.y_coord}, {self.value})"
 
      
-class ClientMap():
+class Map():
     """The data structure for the 2D map grid used by the client"""
     
     def __init__(self, grid: list[list[str]], num_rows: int, num_cols: int):
@@ -85,7 +83,7 @@ class ClientMap():
         return ret_array
     
             
-class Map(ClientMap):
+class ServerMap(Map):
     """The data structure for the 2D map grid used by the server"""
     
     def __init__(self, map_file_path: str, mine_file_path: str):
@@ -116,7 +114,7 @@ class Map(ClientMap):
 class Rover():
     """A class representing the Rover object"""
     
-    def __init__(self, id: int, map: ClientMap, commands: str, stub: gc_pb2_grpc.GroundControlStub, start_x: int = 0, start_y: int = 0):
+    def __init__(self, id: int, map: Map, commands: str, stub: gc_pb2_grpc.GroundControlStub, start_x: int = 0, start_y: int = 0):
         self.id: int = id
         self.commands: list = list(commands)
         self.stub: gc_pb2_grpc.GroundControlStub = stub         #lets rover comm w/ server on its own

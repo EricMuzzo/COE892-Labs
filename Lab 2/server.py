@@ -1,13 +1,11 @@
 import grpc
 import requests
 from concurrent import futures
-from src.models import Cell, Map
+from src.models import Cell, ServerMap
 import logging
 
 from rpc import ground_control_pb2 as gc_pb2
 from rpc import ground_control_pb2_grpc as gc_pb2_grpc
-# import ground_control_pb2 as gc_pb2
-# import ground_control_pb2_grpc as gc_pb2_grpc
 
 #============================================
 # Constants
@@ -89,7 +87,7 @@ if __name__ == "__main__":
     logging.info("Log configured")
     
     #Initialize the map into memory
-    map = Map(map_file_path, mine_file_path)
+    map = ServerMap(map_file_path, mine_file_path)
     logging.info("Map initialized")
 
     serve()

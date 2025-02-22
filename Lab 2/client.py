@@ -2,7 +2,7 @@ import grpc
 from rpc import ground_control_pb2 as gc_pb2
 from rpc import ground_control_pb2_grpc as gc_pb2_grpc
 
-from src.models import logger, Cell, ClientMap, Rover
+from src.models import logger, Map, Rover
 
 #============================================
 # Constants
@@ -11,7 +11,7 @@ HOST = "localhost"
 PORT = 5001
 
 
-def fetch_map() -> ClientMap:
+def fetch_map() -> Map:
     """Fetch the map from the server and process it into a Map data structure"""
     
     map_res = stub.GetMap(gc_pb2.MapRequest())
@@ -23,7 +23,7 @@ def fetch_map() -> ClientMap:
     numCols:int = map_res.numCols
     
     #Store in Map Data Structure
-    map = ClientMap(grid=map_grid, num_rows=numRows, num_cols=numCols)
+    map = Map(grid=map_grid, num_rows=numRows, num_cols=numCols)
     
     logger.info("Map received and processed")
     
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     #=================================================================
     # Get and process the map from the server
     #=================================================================
-    map:ClientMap = fetch_map()
+    map:Map = fetch_map()
     
     
     #=================================================================
