@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+// The ground control service definition
+service GroundControl {
+    rpc GetMap (MapRequest) returns (MapResponse){}
+    rpc GetCommands (CommandRequest) returns (CommandResponse){}
+    rpc GetMineSerial (SerialNumRequest) returns (SerialNumResponse){}
+    rpc ReportStatus (ExecutionStatus) returns (google.protobuf.Empty){}
+    rpc ShareMinPin (MinePin) returns (google.protobuf.Empty){}
+}
+
+message MapRequest {}
+
+message MapRow {
+    repeated string cells = 1;
+}
+
+message MapResponse{
+    repeated MapRow grid = 1;
+    int32 numRows = 2;
+    int32 numCols = 3;
+}
+
+message CommandRequest {
+    int32 rover_id = 1;
+}
+
+message CommandResponse {
+    string commands = 1;
+}
+
+message SerialNumRequest {
+    int32 x_pos = 1;
+    int32 y_pos = 2;
+}
+
+message SerialNumResponse{
+    string serialNum = 1;
+}
+
+message ExecutionStatus {
+    int32 rover_id = 1;
+    bool success = 2;
+    string msg = 3;
+}
+
+message MinePin {
+    int32 rover_id = 1;
+    string pin = 2;
+}
