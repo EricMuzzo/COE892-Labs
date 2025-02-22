@@ -27,83 +27,8 @@ class Cell():
         
     def __repr__(self):
         return f"Cell({self.x_coord}, {self.y_coord}, {self.value})"
-        
-        
-class Map():
-    """The data structure for the 2D map grid used by the server"""
-    
-    def __init__(self, map_file_path: str, mine_file_path: str):
-        
-        self.cells: list[list[Cell]] = []
-        
-        #Process the map and mines files and generate Cell objects
-        map_f = open(map_file_path, "r")
-        header = map_f.readline().split()
 
-        self.num_rows = int(header[0])
-        self.num_cols = int(header[1])
-        
-        mine_f = open(mine_file_path, "r")
-        mine_serials = [line.strip() for line in mine_f]
-        num_serials = len(mine_serials)
-        serial_cntr = 0
-        
-        
-        for row_index, line in enumerate(map_f):
-            row = []
-            for col_index, cell in enumerate(line.strip().split()):
-                if cell == "1":
-                    cell_val = "MINE"
-                    cell_mine_serial = mine_serials[serial_cntr % num_serials]
-                    serial_cntr += 1
-                    row.append(Cell(row_index, col_index, cell_val, cell_mine_serial))
-                else:
-                    cell_val = "EMPTY"
-                    row.append(Cell(row_index, col_index, cell_val))
-                
-            self.cells.append(row)
-            
-        map_f.close()
-        mine_f.close()
-            
-        #Link the cells together
-        self._link_cells()
-        
-    def _link_cells(self):
-        """Link the cells together to form a grid."""
-        
-        for row in range(self.num_rows):
-            for col in range(self.num_cols):
-                cell: Cell = self.cells[row][col]
-                if row > 0:
-                    cell.up = self.cells[row - 1][col]
-                if row < self.num_rows - 1:
-                    cell.down = self.cells[row + 1][col]
-                if col > 0:
-                    cell.left = self.cells[row][col - 1]
-                if col < self.num_cols - 1:
-                    cell.right = self.cells[row][col + 1]
-            
-    def print_grid(self):
-        """Print the map grid with character representations of empty cells and mines."""
-        for row in self.cells:
-            print(" ".join("M" if cell.value == "MINE" else "E" for cell in row))
-            
-    def array_repr(self) -> list[list[str]]:
-        """Returns a 2D array of strings of either 0 or 1"""
-        
-        ret_array: list[list[str]] = []
-        
-        for row in self.cells:
-            row_array: list[str] = []
-            for cell in row:
-                val = "0" if cell.value == "EMPTY" else "1"
-                row_array.append(val)
-            ret_array.append(row_array)
-            
-        return ret_array
-    
-    
+     
 class ClientMap():
     """The data structure for the 2D map grid used by the client"""
     
@@ -160,6 +85,34 @@ class ClientMap():
         return ret_array
     
             
+class Map(ClientMap):
+    """The data structure for the 2D map grid used by the server"""
+    
+    def __init__(self, map_file_path: str, mine_file_path: str):
+        
+        #Process the map file and call the parent constructor
+        with open(map_file_path, "r") as map_f:
+            header = map_f.readline().split()
+            num_rows = int(header[0])
+            num_cols = int(header[1])
+            
+            grid = [line.strip().split() for line in map_f]
+        
+        super().__init__(grid, num_rows, num_cols)
+        
+        #Process the mine file and add mine serials into the data structure
+        with open(mine_file_path, "r") as mine_f:
+            mine_serials = [line.strip() for line in mine_f]
+            num_serials = len(mine_serials)
+            serial_cntr = 0
+        
+        for row in self.cells:
+            for cell in row:
+                if cell.value == "MINE":
+                    cell.mine_serial = mine_serials[serial_cntr % num_serials]
+                    serial_cntr += 1
+    
+       
 class Rover():
     """A class representing the Rover object"""
     

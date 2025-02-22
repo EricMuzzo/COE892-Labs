@@ -25,6 +25,7 @@ class GroundControlService(gc_pb2_grpc.GroundControlServicer):
     def GetMap(self, request, context):
         
         print("\nMap requested")
+        
         #Protobuf format conversion
         map_array = map.array_repr()
         map_rows = [gc_pb2.MapRow(cells=row) for row in map_array]
