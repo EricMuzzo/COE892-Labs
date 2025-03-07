@@ -64,7 +64,7 @@ python server.py
 - In terminal 3: `python src/deminers.py`
 - Then input either 1 or 2 for the deminer ID
 
-- In terminal 4: ```python src/deminers.py```
+- In terminal 4: `python src/deminers.py`
 - Then input either 1 or 2 for the deminer ID
 
 ### 3. Run the Client
