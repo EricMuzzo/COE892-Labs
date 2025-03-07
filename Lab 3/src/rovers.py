@@ -122,6 +122,7 @@ class Rover():
         return f"[ROVER {self.id}]: Position: ({self.position.x_coord}, {self.position.y_coord}), Orientation: {self.orientation}"
     
     def getPathArrayString(self) -> str:
+        """Returns the rover's path (same as path_x.txt) through the map as a printable string"""
         string = ''
         for row in self.path_array:
             string += " ".join(char for char in row) + "\n"
