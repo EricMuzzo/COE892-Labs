@@ -1,0 +1,2 @@
+- rovers will have delays in their execution so that doing anything real time is possible
+- updating the map causes a wipe to existing memory

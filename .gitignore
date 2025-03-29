@@ -3682,3 +3682,4 @@ Lab 1/Part 1/venv/Lib/site-packages/charset_normalizer-3.4.1.dist-info/REQUESTED
 Lab 1/Part 1/venv/Lib/site-packages/idna-3.10.dist-info/REQUESTED
 Lab 1/Part 1/venv/Lib/site-packages/urllib3-2.3.0.dist-info/REQUESTED
 .gitignore
+__pycache__
