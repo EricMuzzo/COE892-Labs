@@ -72,7 +72,7 @@ class Rover():
                         self.orientation = "DOWN"
             case "D":
                 
-                print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_position}, {self.position.y_position}). Serial {self.position.mine_serial}. Begin digging...")
+                print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_position}, {self.position.y_position}). Serial {self.position.serial}. Begin digging...")
                 
                 if not self.mine(self.position.serial):
                     print(f"[ROVER {self.id}]: Failed to mine mine with serial {self.position.serial}. Rover destroyed.")
@@ -82,7 +82,7 @@ class Rover():
                 
             
     def run(self):
-        """Runs the rover through the map"""
+        """Runs the rover through the map. Used for automated running."""
         
         eliminated = False
         #Change status
@@ -109,7 +109,31 @@ class Rover():
             time.sleep(5)
         
         self.status = "Eliminated" if eliminated else "Finished"
+        
+    def run_command(self, command: str) -> bool:
+        """Runs a single command. Used for websocket rover control
 
+        Returns:
+            bool: Returns `True` if the rover was destroyed and `False` otherwise
+        """
+        
+        #Mark position in path array
+        self.path_array[self.position.y_position][self.position.x_position] = "*"
+        
+        #First check the termination case: rover is on a mine and does not dig
+        if isinstance(self.position, map.Mine) and command != "D":
+            print(f"[ROVER {self.id}]: Mine hit at ({self.position.x_position}, {self.position.y_position}). Command was not \'D\'. Rover destroyed.")
+            self.path_array[self.position.y_position][self.position.x_position] = "!"
+            self.status = "Eliminated"
+            return True
+        
+        if not isinstance(self.position, map.Mine) and command == "D":
+            return False
+
+        self.move(command)
+        return False
+
+        
             
     def hashKey(self, pin: str, serial: str) -> str:
         temp_key = pin + serial

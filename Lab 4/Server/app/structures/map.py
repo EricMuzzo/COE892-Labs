@@ -43,7 +43,7 @@ class Mine(Cell):
 class ServerMap():
     """The data structure for the 2D map grid used by the server"""
     
-    def __init__(self, map_height: int=20, map_width: int=20):
+    def __init__(self, map_height: int=12, map_width: int=12):
         
         self.height = map_height
         self.width = map_width

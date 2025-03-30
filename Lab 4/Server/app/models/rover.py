@@ -18,3 +18,7 @@ class RoverModel(RoverBase):
 class RoverUpdate(BaseModel):
     """Model used for validating PUT endpoint request body."""
     commands: str = Field(..., example="MRLDRLMDD")
+    
+class RoverPath(BaseModel):
+    """The response model of the rover path"""
+    path: list[list[str]] = Field(..., description="2D Array of string cells indicating the rover's path.")
