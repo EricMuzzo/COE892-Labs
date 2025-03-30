@@ -1,5 +1,6 @@
 from nicegui import ui, run
 import httpx
+import asyncio
 
 API_BASE = "https://coe892lab42022em-hzhha3aaaca6eyhu.canadacentral-01.azurewebsites.net"
 
@@ -8,7 +9,8 @@ state = {
     "height": 0,
     "cell_refs": [],
     "grid_container": None,
-    "selected_rover_id": None
+    "selected_rover_id": None,
+    "placed_rover_id": None
 }
 
 
@@ -89,6 +91,7 @@ async def send_dispatch_call(id: int):
     
     
 async def create_rover(commands: str, x_position: int, y_position: int, orientation: str):
+    print("Sending", orientation)
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{API_BASE}/rovers", json={
             "commands": commands,
@@ -97,6 +100,7 @@ async def create_rover(commands: str, x_position: int, y_position: int, orientat
             "orientation": orientation
         })
         response.raise_for_status()
+        print(response.json())
         return response.json()
     
     
@@ -110,7 +114,47 @@ async def dispatch_rover(rover_id: int, dialog):
     ui.notify(f"Dispatching rover {rover_id}", type='positive')
     dialog.close()
     
+    ui.timer(0.1, lambda: track_rover_position(rover_id), once=True)
+    
     await send_dispatch_call(rover_id)
+
+
+async def track_rover_position(rover_id: int):
+    previous_position = None
+    
+    while True:
+        await asyncio.sleep(0.5)
+        rover = await fetch_rover(rover_id)
+        
+        current_position = (rover["y_position"], rover["x_position"])
+        status = rover["status"]
+        
+        if previous_position and current_position != previous_position:
+            #mark old position
+            update_cell(previous_position[0], previous_position[1], "❎")
+            
+        update_cell(current_position[0], current_position[1], "🚗")
+        previous_position = current_position
+        
+        if status == "Eliminated":
+            update_cell(current_position[0], current_position[1], "☠️")
+            ui.notify(f"Rover {rover_id} has been destroyed", position="center", type="negative")
+            break
+        
+        if status == "Finished":
+            ui.notify(f"Rover {rover_id} has finished", position="center", type="positive")
+            break
+        
+        
+def clear_rover_from_grid():
+    """Remove all car emojis from the grid."""
+    for row_cells in state["cell_refs"]:
+        for cell in row_cells:
+            if cell.text == "🚗":
+                cell.text = ""
+                cell.update()
+
+
 
 async def render_map(data=None, mine_records=None, rover_records=None):
     
@@ -159,7 +203,9 @@ async def render_map(data=None, mine_records=None, rover_records=None):
                     if value == 1:
                         emoji = "💣"
                     if (row, col) in rover_lookup:
-                        emoji = "🚗"
+                        rover = rover_lookup[(row, col)]
+                        if rover["id"] == state.get("placed_rover_id"):
+                            emoji = "🚗"
 
                     tooltip_text = f"({row}, {col})"
                     if (row, col) in mine_lookup:
@@ -371,8 +417,8 @@ def render_rover_controls():
                     ui.label("Create New Rover").classes("text-lg font-bold mb-2")
 
                     commands = ui.input("Command Sequence").classes("mb-2 w-48")
-                    x_input = ui.input("Starting X Position").classes("mb-2 w-48")
-                    y_input = ui.input("Starting Y Position").classes("mb-4 w-48")
+                    x_input = ui.input("Starting X Position", value="0").classes("mb-2 w-48")
+                    y_input = ui.input("Starting Y Position", value="0").classes("mb-4 w-48")
                     orientation = ui.select(["DOWN", "UP", "LEFT", "RIGHT"], value="DOWN")
 
                     with ui.row().classes("justify-end gap-2"):
@@ -386,6 +432,7 @@ def render_rover_controls():
             start_x = x_input.value.strip()
             start_y = y_input.value.strip()
             orientation = orientation.value
+            print(orientation)
 
             # Validation
             if not (start_x.isdigit() and start_y.isdigit()):
@@ -418,7 +465,7 @@ def render_rover_controls():
         async def show_rover_popup(rover_id: int):
             # Fetch full rover data
             rover = await fetch_rover(rover_id)
-
+            print(rover)
             dialog = ui.dialog()
             with dialog:
                 with ui.card().classes("w-72 p-4"):
@@ -439,18 +486,29 @@ def render_rover_controls():
             dialog.open()
 
         async def delete_rover_and_refresh(rover_id: int, dialog):
-            response = await delete_rover(rover_id)
-
+            await delete_rover(rover_id)
+            
+            if state.get("placed_rover_id") == rover_id:
+                clear_rover_from_grid()
+                state["placed_rover_id"] = None
+        
             dialog.close()
             await render_map()
             await refresh_rover_list()
             
         
         def place_rover_on_map(rover, dialog):
-            row = rover["y_position"]
-            col = rover["x_position"]
-            update_cell(row, col, "🚗")
+            status = rover.get("status")
+            
+            if status in ["Finished", "Eliminated"]:
+                ui.notify(f"Cannot place rover with status '{status}'", type="warning")
+                return
+            
+            clear_rover_from_grid()
+            
+            state["placed_rover_id"] = rover["id"]
             dialog.close()
+            ui.timer(0.1, lambda: render_map(), once=True)
 
         # Load initial list when the app loads
         ui.timer(0.1, refresh_rover_list, once=True)

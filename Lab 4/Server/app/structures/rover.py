@@ -29,7 +29,7 @@ class Rover():
         
         if orientation not in ["UP", "DOWN", "LEFT", "RIGHT"]:
             raise ValueError("Invalid orientation")
-        self.orientation: str = "DOWN"
+        self.orientation = orientation
         
     
     def dispatch(self):
