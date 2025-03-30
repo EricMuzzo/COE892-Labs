@@ -132,7 +132,7 @@ async def updateRover(id: int, commands: RoverUpdate) -> RoverModel:
     if rover.status == 'Eliminated':
         raise HTTPException(400, detail=f"Rover {id} has been destroyed.")
     
-    state.rovers[id].commands = commands
+    state.rovers[id].commands = commands.commands
     rover = state.rovers.get(id)
     
     return rover.dump_to_model()

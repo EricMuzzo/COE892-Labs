@@ -31,7 +31,7 @@ tags_metadata = [
 app = FastAPI(
     title="Central API",
     description=description,
-    version="1.1.1",
+    version="1.1.2",
     contact={
         "name": "Eric Muzzo",
         "email": "ericm02@me.com"
