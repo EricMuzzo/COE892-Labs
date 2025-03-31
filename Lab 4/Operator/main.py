@@ -1,8 +1,11 @@
 from nicegui import ui, run
 import httpx
 import asyncio
+import websockets
+import json
 
 API_BASE = "https://coe892lab42022em-hzhha3aaaca6eyhu.canadacentral-01.azurewebsites.net"
+SOCKETBASE = "wss://coe892lab42022em-hzhha3aaaca6eyhu.canadacentral-01.azurewebsites.net/rovers"
 
 state = {
     "width": 0,
@@ -10,7 +13,8 @@ state = {
     "cell_refs": [],
     "grid_container": None,
     "selected_rover_id": None,
-    "placed_rover_id": None
+    "placed_rover_id": None,
+    "dispatched_rovers": set()
 }
 
 
@@ -60,6 +64,13 @@ async def create_mine(serial: str, x_position: int, y_position: int):
         return response.json()
     
     
+async def update_mine(id: int, data):
+    async with httpx.AsyncClient() as client:
+        response = await client.put(f"{API_BASE}/mines/{id}", json=data)
+        response.raise_for_status()
+        return response
+    
+    
 async def delete_mine(id: int):
     async with httpx.AsyncClient() as client:
         response = await client.delete(f"{API_BASE}/mines/{id}")
@@ -91,7 +102,6 @@ async def send_dispatch_call(id: int):
     
     
 async def create_rover(commands: str, x_position: int, y_position: int, orientation: str):
-    print("Sending", orientation)
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{API_BASE}/rovers", json={
             "commands": commands,
@@ -100,8 +110,15 @@ async def create_rover(commands: str, x_position: int, y_position: int, orientat
             "orientation": orientation
         })
         response.raise_for_status()
-        print(response.json())
         return response.json()
+    
+
+async def update_rover(id: int, commands: str):
+    async with httpx.AsyncClient() as client:
+        response = await client.put(f"{API_BASE}/rovers/{id}", json={
+            "commands": commands
+        })
+        return response
     
     
 async def delete_rover(id: int):
@@ -114,6 +131,7 @@ async def dispatch_rover(rover_id: int, dialog):
     ui.notify(f"Dispatching rover {rover_id}", type='positive')
     dialog.close()
     
+    state["dispatched_rovers"].add(rover_id)
     ui.timer(0.1, lambda: track_rover_position(rover_id), once=True)
     
     await send_dispatch_call(rover_id)
@@ -121,7 +139,6 @@ async def dispatch_rover(rover_id: int, dialog):
 
 async def track_rover_position(rover_id: int):
     previous_position = None
-    
     while True:
         await asyncio.sleep(0.5)
         rover = await fetch_rover(rover_id)
@@ -139,10 +156,20 @@ async def track_rover_position(rover_id: int):
         if status == "Eliminated":
             update_cell(current_position[0], current_position[1], "☠️")
             ui.notify(f"Rover {rover_id} has been destroyed", position="center", type="negative")
+            state["dispatched_rovers"].discard(rover_id)
+            if state.get("placed_rover_id") == rover_id:
+                state["placed_rover_id"] = None
             break
         
         if status == "Finished":
+            if current_position:
+                update_cell(current_position[0], current_position[1], "")
+            
             ui.notify(f"Rover {rover_id} has finished", position="center", type="positive")
+
+            state["dispatched_rovers"].discard(rover_id)
+            if state.get("placed_rover_id") == rover_id:
+                state["placed_rover_id"] = None
             break
         
         
@@ -153,7 +180,6 @@ def clear_rover_from_grid():
             if cell.text == "🚗":
                 cell.text = ""
                 cell.update()
-
 
 
 async def render_map(data=None, mine_records=None, rover_records=None):
@@ -182,7 +208,6 @@ async def render_map(data=None, mine_records=None, rover_records=None):
     if state["grid_container"] is not None:
         state["grid_container"].clear()
 
-    # Create a centered column for the grid
     with state["grid_container"]:
         with ui.element("div").classes("grid border").style(
             f"""
@@ -204,8 +229,13 @@ async def render_map(data=None, mine_records=None, rover_records=None):
                         emoji = "💣"
                     if (row, col) in rover_lookup:
                         rover = rover_lookup[(row, col)]
-                        if rover["id"] == state.get("placed_rover_id"):
+                        is_placed = rover["id"] == state.get("placed_rover_id")
+                        is_dispatched = rover["id"] in state["dispatched_rovers"]
+
+                        if is_placed and not is_dispatched:
                             emoji = "🚗"
+                        elif is_placed and is_dispatched:
+                            emoji = "✅"
 
                     tooltip_text = f"({row}, {col})"
                     if (row, col) in mine_lookup:
@@ -369,6 +399,59 @@ def render_mine_controls():
                     ui.button(f"Mine {mine['id']}", on_click=lambda m=mine: show_mine_popup(m["id"])) \
                         .classes("w-full text-left bg-gray-100 hover:bg-gray-200")
 
+        async def edit_mine(mine_id: int, serial_input, x_input, y_input, dialog):
+            serial = serial_input.value.strip()
+            x = x_input.value.strip()
+            y = y_input.value.strip()
+
+            # Basic validation
+            if serial and (not serial.isalnum() or len(serial) > 10):
+                ui.notify("Serial must be alphanumeric and ≤ 10 characters", type="warning")
+                return
+
+            update_payload = {}
+            if serial:
+                update_payload["serial"] = serial
+            if x.isdigit():
+                update_payload["x_position"] = int(x)
+            if y.isdigit():
+                update_payload["y_position"] = int(y)
+
+            if not update_payload:
+                ui.notify("Please provide at least one valid field", type="warning")
+                return
+
+            await update_mine(mine_id, update_payload)
+
+            dialog.close()
+            ui.notify(f"Mine {mine_id} updated", type="positive")
+            await refresh_mine_list()
+            await render_map()
+
+        def show_edit_mine_dialog(mine):
+            dialog = ui.dialog()
+
+            with dialog:
+                with ui.card().classes("w-96 p-4"):
+                    with ui.row().classes("justify-between items-center"):
+                        ui.label(f"Edit Mine {mine['id']}").classes("text-lg font-bold")
+                        ui.button("❌", on_click=dialog.close).props("flat")
+
+                    serial_input = ui.input("Serial Number").classes("w-full mb-2").props("maxlength=10")
+                    serial_input.value = mine.get("serial", "")
+
+                    x_input = ui.input("X Position").classes("w-full mb-2")
+                    x_input.value = str(mine.get("x_position", ""))
+
+                    y_input = ui.input("Y Position").classes("w-full")
+                    y_input.value = str(mine.get("y_position", ""))
+
+                    with ui.row().classes("justify-end mt-4 gap-2"):
+                        ui.button("Cancel", on_click=dialog.close)
+                        ui.button("Save", color="green", on_click=lambda: edit_mine(mine["id"], serial_input, x_input, y_input, dialog))
+
+            dialog.open()
+
         async def show_mine_popup(mine_id: int):
             # Fetch full mine data
             mine = await fetch_mine(mine_id)
@@ -385,6 +468,7 @@ def render_mine_controls():
                     ui.label(f"Y Position: {mine['y_position']}")
 
                     with ui.row().classes("justify-end mt-4"):
+                        ui.button("Edit", on_click=lambda: show_edit_mine_dialog(mine))
                         ui.button("Delete", color="red", on_click=lambda: delete_mine_and_refresh(mine['id'], dialog))
 
             dialog.open()
@@ -432,7 +516,6 @@ def render_rover_controls():
             start_x = x_input.value.strip()
             start_y = y_input.value.strip()
             orientation = orientation.value
-            print(orientation)
 
             # Validation
             if not (start_x.isdigit() and start_y.isdigit()):
@@ -465,7 +548,6 @@ def render_rover_controls():
         async def show_rover_popup(rover_id: int):
             # Fetch full rover data
             rover = await fetch_rover(rover_id)
-            print(rover)
             dialog = ui.dialog()
             with dialog:
                 with ui.card().classes("w-72 p-4"):
@@ -480,11 +562,50 @@ def render_rover_controls():
                     ui.label(f"Status: {rover['status']}")
 
                     with ui.row().classes("justify-end mt-4"):
+                        ui.button("Control", color="blue", on_click=lambda: open_rover_control(rover))
                         ui.button("Delete", color="red", on_click=lambda: delete_rover_and_refresh(rover['id'], dialog))
+                        ui.button("Edit", color="blue", on_click=lambda: show_edit_rover_dialog(rover))
                         ui.button("Place On Map", color="blue", on_click=lambda r=rover: place_rover_on_map(r, dialog))
 
             dialog.open()
+            
+        async def edit_rover_commands(rover_id: int, input_field, dialog):
+            new_commands = input_field.value.strip()
 
+            if not new_commands:
+                ui.notify("Commands cannot be empty", type="warning")
+                return
+
+            
+            response = await update_rover(rover_id, new_commands)
+            if response.status_code != 200:
+                ui.notify("Failed to update rover", type="warning")
+                return
+
+            dialog.close()
+            ui.notify(f"Rover {rover_id} updated", type="positive")
+            await refresh_rover_list()
+            await render_map()
+
+        def show_edit_rover_dialog(rover):
+            dialog = ui.dialog()
+
+            with dialog:
+                with ui.card().classes("w-96 p-4"):
+                    with ui.row().classes("justify-between items-center"):
+                        ui.label(f"Edit Rover {rover['id']}").classes("text-lg font-bold")
+                        ui.button("❌", on_click=dialog.close).props("flat")
+
+                    commands_input = ui.input("New Commands").classes("w-full").props("maxlength=100")
+                    commands_input.value = rover.get("commands", "")
+
+                    with ui.row().classes("justify-end mt-4 gap-2"):
+                        ui.button("Cancel", on_click=dialog.close)
+                        ui.button("Save", color="green", on_click=lambda: edit_rover_commands(rover["id"], commands_input, dialog))
+
+            dialog.open()
+
+        
         async def delete_rover_and_refresh(rover_id: int, dialog):
             await delete_rover(rover_id)
             
@@ -513,6 +634,74 @@ def render_rover_controls():
         # Load initial list when the app loads
         ui.timer(0.1, refresh_rover_list, once=True)
 
+
+def open_rover_control(rover):
+    dialog = ui.dialog()
+
+    with dialog:
+        with ui.card().classes("w-96 p-4"):
+            with ui.row().classes("justify-between items-center"):
+                ui.label(f"Control Rover {rover['id']}").classes("text-lg font-bold")
+                ui.button("❌", on_click=dialog.close).props("flat")
+
+            status_label = ui.label("Status: Connecting...").classes("mb-2")
+
+            cmd_row = ui.row().classes("justify-between mt-2")
+            buttons = {
+                "L": ui.button("L", on_click=None),
+                "R": ui.button("R", on_click=None),
+                "M": ui.button("M", on_click=None),
+                "D": ui.button("D", on_click=None),
+            }
+            for b in buttons.values():
+                b.classes("w-16")
+
+            for b in buttons.values():
+                cmd_row.add_slot(b)
+
+    dialog.open()
+
+    async def send_command(ws, command):
+        await ws.send(command)
+
+    async def send_rover_command(ws, cmd, rover_id, status_label, dialog):
+        await ws.send(cmd)
+        response = await ws.recv()
+        data = json.loads(response)
+
+        # Update UI
+        pos = data["position"]
+        row, col = pos["y_position"], pos["x_position"]
+        update_cell(row, col, "🚗")
+        status_label.text = f"Status: {data['status']}"
+
+        if data["status"] in ["Eliminated", "Finished"]:
+            await ws.close()
+            dialog.close()
+            ui.notify(f"Rover {rover_id} {data['status']}", type="warning")
+                    
+    async def connect_and_control():
+        ws_url = f"{SOCKETBASE}/{rover['id']}"
+        try:
+            async with websockets.connect(ws_url) as ws:
+                print("connected")
+                initial = await ws.recv()
+                data = json.loads(initial)
+                if data.get("status") != "ready":
+                    status_label.text = "Status: Failed to connect"
+                    return
+
+                status_label.text = "Status: Connected"
+
+                # Bind buttons
+                for cmd, btn in buttons.items():
+                    btn.on("click", lambda _, c=cmd: ui.timer(0, lambda: send_rover_command(ws, c, rover['id'], status_label, dialog)))
+
+        except ValueError as e:
+            print(e)
+            status_label.text = f"Error: {str(e)}"
+
+    ui.timer(0.1, connect_and_control, once=True)
 
 @ui.page("/")
 async def main():
